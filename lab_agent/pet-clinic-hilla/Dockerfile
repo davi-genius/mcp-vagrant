@@ -12,8 +12,7 @@ COPY .mvn .mvn
 
 # Copy source code
 COPY src ./src
-COPY package.json .
-COPY package-lock.json .
+COPY package*.json .
 COPY tsconfig.json .
 COPY types.d.ts .
 COPY vite.config.ts .
