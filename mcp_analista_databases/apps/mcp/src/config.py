@@ -21,9 +21,9 @@ class Config:
     # Local Database Configuration (NEW - for local development without AWS)
     LOCAL_DB_HOST = os.getenv('LOCAL_DB_HOST', 'localhost')
     LOCAL_DB_PORT = int(os.getenv('LOCAL_DB_PORT', '5432'))
-    LOCAL_DB_NAME = os.getenv('LOCAL_DB_NAME', 'postgres')
-    LOCAL_DB_USERNAME = os.getenv('LOCAL_DB_USERNAME', 'postgres')
-    LOCAL_DB_PASSWORD = os.getenv('LOCAL_DB_PASSWORD', 'postgres')
+    LOCAL_DB_NAME = os.getenv('LOCAL_DB_NAME', 'petclinic')
+    LOCAL_DB_USERNAME = os.getenv('LOCAL_DB_USERNAME', 'petclinic')
+    LOCAL_DB_PASSWORD = os.getenv('LOCAL_DB_PASSWORD', 'petclinic')
     
     # Development Database Configuration (NEW - additional local preset)
     DEV_DB_HOST = os.getenv('DEV_DB_HOST', 'localhost')

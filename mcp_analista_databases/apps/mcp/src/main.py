@@ -15,7 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 from config import configure_logging, server_lifespan, session_handler
 from tools.mcp_tools import register_all_tools
-from prompts.prompts import MODELS, get_model_list, get_model_by_id, get_model_curl_command
+from prompts.prompts import MODELS, get_model_list, get_model_by_id, get_model_curl_command, get_models_by_category, get_execution_sequence
 
 # Configure logging
 logger = configure_logging()
@@ -77,10 +77,31 @@ async def session_status(request):
 @mcp.custom_route("/prompts", methods=["GET"])
 async def list_prompts(request):
     """
-    Lista todos os prompts disponíveis
+    Lista todos os prompts organizados por categoria
     """
     return Response(
         content=get_model_list(),
+        status_code=200,
+        media_type="text/plain"
+    )
+
+# Add simple prompts list for quick reference
+@mcp.custom_route("/prompts/simple", methods=["GET"])
+async def list_prompts_simple(request):
+    """
+    Lista simples de prompts para referência rápida
+    """
+    simple_list = "\n🚀 PROMPTS DISPONÍVEIS - REFERÊNCIA RÁPIDA\n"
+    simple_list += "=" * 50 + "\n\n"
+    
+    for key, model in sorted(MODELS.items(), key=lambda x: x[1].get('execution_order', 999)):
+        priority_icon = "🔴" if model.get('priority') == 'Alta' else "🟡" if model.get('priority') == 'Média' else "🟢"
+        simple_list += f"{key}. {model['name']} {priority_icon}\n"
+    
+    simple_list += "\n💡 Use: curl http://localhost:8000/api/prompts/{ID} para detalhes\n"
+    
+    return Response(
+        content=simple_list,
         status_code=200,
         media_type="text/plain"
     )
@@ -97,13 +118,13 @@ async def list_prompts_json(request):
 @mcp.custom_route("/api/prompts/{prompt_id}", methods=["GET"])
 async def get_prompt(request):
     """
-    Retorna detalhes de um prompt específico
+    Retorna detalhes de um prompt específico (suporta formato 01, 1, etc.)
     """
     prompt_id = request.path_params.get("prompt_id")
     model = get_model_by_id(prompt_id)
     
     if not model:
-        return JSONResponse({"error": "Prompt não encontrado"}, status_code=404)
+        return JSONResponse({"error": f"Prompt '{prompt_id}' não encontrado. Use formato 01-10."}, status_code=404)
     
     return JSONResponse(model)
 
@@ -111,13 +132,13 @@ async def get_prompt(request):
 @mcp.custom_route("/api/prompts/{prompt_id}/command", methods=["GET"])
 async def get_prompt_command(request):
     """
-    Gera comando curl para executar o prompt
+    Gera comando curl para executar o prompt (suporta formato 01, 1, etc.)
     """
     prompt_id = request.path_params.get("prompt_id")
     model = get_model_by_id(prompt_id)
     
     if not model:
-        return JSONResponse({"error": "Prompt não encontrado"}, status_code=404)
+        return JSONResponse({"error": f"Prompt '{prompt_id}' não encontrado. Use formato 01-10."}, status_code=404)
     
     # Pegar parâmetros de conexão da query string ou usar defaults
     host = request.query_params.get("host", "localhost")
@@ -131,6 +152,65 @@ async def get_prompt_command(request):
     )
     
     return JSONResponse(command_data)
+
+# Add organized prompts by category endpoint
+@mcp.custom_route("/api/prompts/categories", methods=["GET"])
+async def get_prompts_by_category(request):
+    """
+    Retorna prompts organizados por categoria
+    """
+    categories = get_models_by_category()
+    return JSONResponse({"categories": categories})
+
+# Add execution sequence endpoint
+@mcp.custom_route("/api/prompts/sequence", methods=["GET"])
+async def get_execution_sequence(request):
+    """
+    Retorna sequência recomendada de execução
+    """
+    sequence = get_execution_sequence()
+    return JSONResponse({"execution_sequence": sequence})
+
+# Add batch execution endpoint
+@mcp.custom_route("/api/prompts/batch", methods=["POST"])
+async def execute_batch_prompts(request):
+    """
+    Executa múltiplos prompts em sequência
+    """
+    try:
+        data = await request.json()
+        prompt_ids = data.get('prompt_ids', [])
+        db_config = data.get('database', {})
+        
+        if not prompt_ids:
+            return JSONResponse({"error": "Lista de prompt_ids é obrigatória"}, status_code=400)
+        
+        results = []
+        for prompt_id in prompt_ids:
+            model = get_model_by_id(prompt_id)
+            if model:
+                results.append({
+                    "prompt_id": prompt_id,
+                    "name": model['name'],
+                    "category": model.get('category', 'Outros'),
+                    "status": "ready",
+                    "tool": model['tool']
+                })
+            else:
+                results.append({
+                    "prompt_id": prompt_id,
+                    "status": "error",
+                    "error": f"Prompt '{prompt_id}' não encontrado"
+                })
+        
+        return JSONResponse({
+            "batch_id": f"batch_{len(results)}_{hash(str(prompt_ids))}",
+            "total_prompts": len(prompt_ids),
+            "results": results
+        })
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # Register all tools with the MCP server
 register_all_tools(mcp)

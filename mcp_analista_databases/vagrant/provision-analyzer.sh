@@ -4,21 +4,48 @@ set -e
 
 echo "=== Configurando MCP Database Analyzer com PostgreSQL Integrado ==="
 
-# Update system
+# Fix DNS and network issues
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+
+# Wait for network
+sleep 10
+
+# Update system with retries
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get upgrade -y
+for i in {1..3}; do
+    apt-get update && break
+    echo "Retry $i failed, waiting..."
+    sleep 30
+done
 
-# Install PostgreSQL first
+apt-get upgrade -y --fix-missing
+
+# Install PostgreSQL first with retries
 echo "Instalando PostgreSQL..."
-apt-get install -y postgresql-14 postgresql-contrib-14 postgresql-client-14
+for i in {1..3}; do
+    apt-get install -y postgresql-14 postgresql-contrib-14 postgresql-client-14 --fix-missing && break
+    echo "PostgreSQL install retry $i failed, waiting..."
+    sleep 30
+    apt-get update
+done
 
-# Install Python 3.10 and related packages
+# Install Python 3.10 and related packages with retries
 echo "Instalando Python 3.10 e dependências..."
-apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip
+for i in {1..3}; do
+    apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip python3.10-distutils --fix-missing && break
+    echo "Python install retry $i failed, waiting..."
+    sleep 30
+    apt-get update
+done
 
-# Install system dependencies for PostgreSQL and other requirements
-apt-get install -y libpq-dev gcc curl build-essential netcat
+# Install system dependencies with retries
+for i in {1..3}; do
+    apt-get install -y libpq-dev gcc curl build-essential netcat-openbsd software-properties-common --fix-missing && break
+    echo "Dependencies install retry $i failed, waiting..."
+    sleep 30
+    apt-get update
+done
 
 # Configure PostgreSQL
 echo "Configurando PostgreSQL..."
@@ -57,9 +84,15 @@ done
 # Create symlinks for easier use
 ln -sf /usr/bin/python3.10 /usr/bin/python3
 ln -sf /usr/bin/python3.10 /usr/bin/python
+ln -sf /usr/bin/pip3 /usr/bin/pip
+
+# Update pip to latest version
+echo "Atualizando pip..."
+python3 -m pip install --upgrade pip
 
 # Verify Python installation
 echo "Versão do Python: $(python3 --version)"
+echo "Versão do pip: $(pip --version)"
 
 # Change to MCP directory and set ownership
 cd /opt/mcp
@@ -76,8 +109,14 @@ sudo -u vagrant bash -c "
   source venv/bin/activate
   pip install --upgrade pip setuptools wheel
   pip install --no-cache-dir -r requirements.txt
+  # Install additional dependencies that might be missing
+  pip install requests python-dotenv psycopg2-binary
   echo 'Dependências instaladas com sucesso!'
 "
+
+# Install psycopg2 globally for the prompt script
+echo "Instalando psycopg2 globalmente..."
+pip3 install psycopg2-binary requests python-dotenv
 
 # Verify installations
 echo "Verificando instalações..."
@@ -130,6 +169,15 @@ except Exception as e:
     exit(1)
 '
 "
+
+# Popular banco com dados de exemplo
+echo "Populando banco com dados de exemplo..."
+if [ -f /vagrant/populate-db.sql ]; then
+    sudo -u postgres psql -d petclinic -f /vagrant/populate-db.sql
+    echo "✅ Banco populado com dados de exemplo!"
+else
+    echo "⚠️ Arquivo populate-db.sql não encontrado, pulando população"
+fi
 
 # Create systemd service for MCP Analyzer
 echo "Criando serviço systemd..."
@@ -235,9 +283,9 @@ EOFBASH
 
 echo "=== MCP Analyzer configurado com sucesso! ==="
 echo "Serviços disponíveis:"
-echo "  - API: http://192.168.56.12:8000 (interno) / http://localhost:8000 (externo)"
-echo "  - Health: http://192.168.56.12:8000/health"
-echo "  - Prompts: http://192.168.56.12:8000/prompts"
+echo "  - API: http://192.168.56.10:8000 (interno) / http://localhost:8000 (externo)"
+echo "  - Health: http://192.168.56.10:8000/health"
+echo "  - Prompts: http://192.168.56.10:8000/prompts"
 echo ""
 echo "Comandos úteis:"
 echo "  - mcp-start      : Iniciar prompt MCP interativo"

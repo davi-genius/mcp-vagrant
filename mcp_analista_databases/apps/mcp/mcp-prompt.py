@@ -190,6 +190,8 @@ def list_tables(dbname=None):
                 print(f"{i}. {table_name} ({column_count} colunas)")
         else:
             print("Nenhuma tabela encontrada no schema public.")
+            print("\n💡 DICA: O banco pode estar vazio. Execute o PetClinic primeiro:")
+            print("   curl http://localhost:9080")
             
         cursor.close()
         conn.close()
@@ -273,75 +275,301 @@ def show_db_actions():
     
     if choice == '1':
         list_databases()
+        print()
+        show_db_actions()
     elif choice == '2':
         list_tables()
+        print()
+        show_db_actions()
     elif choice == '3':
         show_prompts_menu()
+        print()
+        show_db_actions()
     elif choice == '4':
         show_mcp_app()
+        print()
+        show_db_actions()
     elif choice == '0':
         return
     else:
         print("Opção inválida!")
-        
-    print()
-    input("Pressione ENTER para continuar...")
-    show_db_actions()  # Retorna ao menu
+        print()
+        show_db_actions()
 
 def show_prompts_menu():
-    """Mostra menu de prompts prontos"""
+    """Mostra menu de prompts organizados por categoria"""
     try:
-        print_header("PROMPTS DE ANALISE")
-        print("PostgreSQL Performance Analyzer")
-        print("=" * 50)
+        print_header("PROMPTS ORGANIZADOS DE ANALISE")
+        print("PostgreSQL Performance Analyzer - Compass UOL")
+        print("=" * 60)
         print()
         
-        # Lista simplificada e otimizada
-        prompts = [
-            "1. Estrutura Completa do Banco",
-            "2. Contagem de Registros por Tabela", 
-            "3. Análise de Performance",
-            "4. Proprietários e Pets", 
-            "5. Estatísticas de Visitas",
-            "6. Configurações do PostgreSQL"
-        ]
-        
-        for prompt in prompts:
-            print(prompt)
-        
-        print()
-        print("💡 Dica: Os prompts executam análises via API MCP")
+        # Prompts organizados por categoria e prioridade
+        print(f"{AmazonColors.UOL_ORANGE}🏗️ === ESTRUTURA E INVENTÁRIO (EXECUTAR PRIMEIRO) ==={AmazonColors.RESET}")
+        print("01. 🏗️ EST-001: Estrutura Completa do Banco        🔴 ALTA")
+        print("02. 📋 EST-002: Inventário de Tabelas              🔴 ALTA")
+        print("03. 📊 EST-003: Contagem de Registros              🔴 ALTA")
         print()
         
-        prompt_id = input("Digite o numero do prompt (0 para voltar): ").strip()
-        if prompt_id and prompt_id != '0':
-            execute_prompt(prompt_id)
+        print(f"{AmazonColors.BLUE}💼 === DADOS DE NEGÓCIO (EXECUTAR SEGUNDO) ==={AmazonColors.RESET}")
+        print("04. 👥 NEG-001: Proprietários por Localização      🟡 MÉDIA")
+        print("05. 🐕 NEG-002: Cadastro de Pets Completo          🟡 MÉDIA")
+        print("06. 🏥 NEG-003: Equipe Veterinária                 🟡 MÉDIA")
+        print("07. 📈 NEG-004: Análise de Visitas                 🟡 MÉDIA")
+        print()
+        
+        print(f"{AmazonColors.ORANGE}⚡ === PERFORMANCE E OTIMIZAÇÃO (EXECUTAR POR ÚLTIMO) ==={AmazonColors.RESET}")
+        print("08. 🔍 PERF-001: Análise de Query                  🔴 ALTA")
+        print("09. 💡 PERF-002: Recomendação de Índices           🔴 ALTA")
+        print("10. ⚙️ PERF-003: Configurações do Sistema          🟡 MÉDIA")
+        print()
+        
+        print(f"{AmazonColors.GRAY}💡 DICAS DE USO:{AmazonColors.RESET}")
+        print("   • Execute na ordem sequencial (01→10) para análise completa")
+        print("   • Prompts 🔴 ALTA são essenciais para diagnóstico")
+        print("   • Prompts 🟡 MÉDIA fornecem insights adicionais")
+        print("   • Digite 'all' para executar sequência completa")
+        print()
+        
+        prompt_id = input(f"{AmazonColors.ORANGE}Digite o número (01-10) ou 'all' (0=voltar): {AmazonColors.RESET}").strip()
+        
+        if prompt_id.lower() == 'all':
+            execute_all_prompts_sequence()
+        elif prompt_id and prompt_id != '0':
+            # Normalizar ID (aceitar 1 ou 01)
+            if prompt_id.isdigit():
+                normalized_id = f"{int(prompt_id):02d}"
+                execute_prompt(normalized_id)
+            else:
+                execute_prompt(prompt_id)
+        elif prompt_id == '0':
+            return
             
     except Exception as e:
         print(f"Erro ao carregar prompts: {e}")
         print("Verifique se o serviço MCP está rodando.")
 
 def execute_prompt(prompt_id):
-    """Executa um prompt via API MCP"""
+    """Executa análises diretas no banco com nova nomenclatura"""
     try:
-        # Fazer chamada para a API MCP
-        response = requests.post(f"{MCP_URL}/execute_prompt", 
-                               json={"prompt_id": int(prompt_id)}, 
-                               timeout=30)
+        conn = psycopg2.connect(
+            host=DB_CONFIG['host'],
+            port=DB_CONFIG['port'],
+            database=DB_CONFIG['dbname'],
+            user=DB_CONFIG['username'],
+            password=DB_CONFIG['password']
+        )
+        cursor = conn.cursor()
         
-        if response.status_code == 200:
-            result = response.json()
-            if 'result' in result:
-                print(result['result'])
+        # Mapear IDs para nomes descritivos
+        prompt_names = {
+            '01': '🏗️ EST-001: Estrutura Completa do Banco',
+            '02': '📋 EST-002: Inventário de Tabelas', 
+            '03': '📊 EST-003: Contagem de Registros',
+            '04': '👥 NEG-001: Proprietários por Localização',
+            '05': '🐕 NEG-002: Cadastro de Pets Completo',
+            '06': '🏥 NEG-003: Equipe Veterinária',
+            '07': '📈 NEG-004: Análise de Visitas',
+            '08': '🔍 PERF-001: Análise de Query',
+            '09': '💡 PERF-002: Recomendação de Índices',
+            '10': '⚙️ PERF-003: Configurações do Sistema'
+        }
+        
+        prompt_name = prompt_names.get(prompt_id, f"ANÁLISE {prompt_id}")
+        print_header(f"EXECUTANDO: {prompt_name}")
+        
+        if prompt_id == '01':  # EST-001: Estrutura Completa
+            print("🔍 Analisando estrutura completa do banco...\n")
+            cursor.execute("""
+                SELECT 
+                    t.table_name,
+                    t.table_type,
+                    COUNT(c.column_name) as column_count,
+                    pg_size_pretty(pg_total_relation_size(quote_ident(t.table_name)::regclass)) as table_size
+                FROM information_schema.tables t
+                LEFT JOIN information_schema.columns c ON t.table_name = c.table_name AND c.table_schema = 'public'
+                WHERE t.table_schema = 'public'
+                GROUP BY t.table_name, t.table_type
+                ORDER BY pg_total_relation_size(quote_ident(t.table_name)::regclass) DESC;
+            """)
+            results = cursor.fetchall()
+            if results:
+                print("📋 ESTRUTURA DAS TABELAS:")
+                print("-" * 60)
+                for table, table_type, col_count, size in results:
+                    print(f"📊 {table}: {col_count} colunas, {size}, tipo: {table_type}")
+                    
+                    # Mostrar colunas de cada tabela
+                    cursor.execute("""
+                        SELECT column_name, data_type, is_nullable, column_default
+                        FROM information_schema.columns
+                        WHERE table_name = %s AND table_schema = 'public'
+                        ORDER BY ordinal_position
+                    """, (table,))
+                    columns = cursor.fetchall()
+                    for col_name, data_type, nullable, default in columns[:5]:  # Mostrar apenas primeiras 5
+                        null_info = "NULL" if nullable == 'YES' else "NOT NULL"
+                        default_info = f" DEFAULT {default}" if default else ""
+                        print(f"   • {col_name}: {data_type} ({null_info}){default_info}")
+                    if len(columns) > 5:
+                        print(f"   ... e mais {len(columns) - 5} colunas")
+                    print()
             else:
-                print("Prompt executado com sucesso!")
+                print("❌ Nenhuma tabela encontrada.")
+                
+        elif prompt_id == '02':  # EST-002: Inventário de Tabelas
+            print("📋 Gerando inventário detalhado...\n")
+            cursor.execute("""
+                SELECT 
+                    schemaname,
+                    tablename,
+                    n_live_tup as live_tuples,
+                    n_dead_tup as dead_tuples,
+                    last_vacuum,
+                    last_analyze
+                FROM pg_stat_user_tables
+                ORDER BY n_live_tup DESC;
+            """)
+            results = cursor.fetchall()
+            if results:
+                print("📊 INVENTÁRIO DETALHADO:")
+                print("-" * 80)
+                for schema, table, live, dead, vacuum, analyze in results:
+                    vacuum_info = vacuum.strftime('%Y-%m-%d %H:%M') if vacuum else 'Nunca'
+                    analyze_info = analyze.strftime('%Y-%m-%d %H:%M') if analyze else 'Nunca'
+                    print(f"📋 {table}: {live:,} registros ativos, {dead} mortos")
+                    print(f"   🧹 Último VACUUM: {vacuum_info} | 📊 Último ANALYZE: {analyze_info}")
+                    print()
+            else:
+                print("❌ Nenhuma estatística encontrada.")
+                
+        elif prompt_id == '03':  # EST-003: Contagem de Registros
+            print("📊 Contando registros em todas as tabelas...\n")
+            cursor.execute("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' ORDER BY table_name
+            """)
+            tables = cursor.fetchall()
+            if tables:
+                total_records = 0
+                print("📈 CONTAGEM POR TABELA:")
+                print("-" * 40)
+                for (table_name,) in tables:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                    count = cursor.fetchone()[0]
+                    total_records += count
+                    print(f"📊 {table_name:15}: {count:,} registros")
+                print("-" * 40)
+                print(f"📈 TOTAL GERAL: {total_records:,} registros")
+            else:
+                print("❌ Nenhuma tabela encontrada.")
+                
+        elif prompt_id == '04':  # NEG-001: Proprietários por Localização
+            print("🌍 Analisando distribuição geográfica...\n")
+            cursor.execute("""
+                SELECT 
+                    city,
+                    COUNT(*) as total_owners,
+                    COUNT(DISTINCT last_name) as unique_surnames,
+                    COUNT(DISTINCT telephone) as unique_phones
+                FROM owners 
+                GROUP BY city 
+                ORDER BY total_owners DESC;
+            """)
+            results = cursor.fetchall()
+            if results:
+                print("🏙️ DISTRIBUIÇÃO POR CIDADE:")
+                print("-" * 50)
+                for city, total, surnames, phones in results:
+                    print(f"🌆 {city:15}: {total:2} proprietários, {surnames} sobrenomes únicos")
+            else:
+                print("❌ Nenhum proprietário encontrado.")
+                
+        elif prompt_id == '05':  # NEG-002: Cadastro de Pets
+            print("🐕 Analisando cadastro de pets...\n")
+            cursor.execute("""
+                SELECT 
+                    p.name as pet_name,
+                    t.name as pet_type,
+                    EXTRACT(YEAR FROM AGE(p.birth_date)) as age_years,
+                    o.first_name || ' ' || o.last_name as owner_name,
+                    o.city
+                FROM pets p
+                JOIN types t ON p.type_id = t.id
+                JOIN owners o ON p.owner_id = o.id
+                ORDER BY age_years DESC
+                LIMIT 10;
+            """)
+            results = cursor.fetchall()
+            if results:
+                print("🐾 TOP 10 PETS MAIS VELHOS:")
+                print("-" * 60)
+                for pet, pet_type, age, owner, city in results:
+                    print(f"🐕 {pet} ({pet_type}): {age} anos - {owner} ({city})")
+            else:
+                print("❌ Nenhum pet encontrado.")
+                
+        elif prompt_id == '10':  # PERF-003: Configurações
+            print("⚙️ Verificando configurações críticas...\n")
+            cursor.execute("""
+                SELECT name, setting, unit, context 
+                FROM pg_settings 
+                WHERE name IN ('max_connections', 'shared_buffers', 'work_mem', 'maintenance_work_mem', 'effective_cache_size')
+                ORDER BY name
+            """)
+            configs = cursor.fetchall()
+            if configs:
+                print("🔧 CONFIGURAÇÕES CRÍTICAS:")
+                print("-" * 50)
+                for name, setting, unit, context in configs:
+                    unit_str = f" {unit}" if unit else ""
+                    print(f"⚙️ {name:20}: {setting}{unit_str} ({context})")
+            else:
+                print("❌ Configurações não encontradas.")
+                
         else:
-            print(f"Erro ao executar prompt: {response.status_code}")
-            print(response.text)
+            print(f"❌ Prompt {prompt_id} ainda não implementado.")
+            print("✅ Disponíveis: 01, 02, 03, 04, 05, 10")
+            print("🚧 Em desenvolvimento: 06, 07, 08, 09")
             
+        cursor.close()
+        conn.close()
+        
     except Exception as e:
-        print(f"Erro ao executar prompt: {e}")
-        print("Verifique se o serviço MCP está rodando.")
+        print(f"❌ Erro ao executar análise: {e}")
+        print("💡 Verifique se o PostgreSQL está rodando e acessível.")
+
+def execute_all_prompts_sequence():
+    """Executa todos os prompts na sequência recomendada"""
+    print_header("EXECUTANDO SEQUÊNCIA COMPLETA DE ANÁLISE")
+    print("🚀 Iniciando análise completa do banco de dados...\n")
+    
+    sequence = ['01', '02', '03', '04', '05', '10']  # Apenas os implementados
+    
+    for i, prompt_id in enumerate(sequence, 1):
+        print(f"\n{'='*60}")
+        print(f"📍 ETAPA {i}/{len(sequence)}: Executando prompt {prompt_id}")
+        print(f"{'='*60}")
+        
+        try:
+            execute_prompt(prompt_id)
+            print(f"\n✅ Prompt {prompt_id} concluído com sucesso!")
+            
+            if i < len(sequence):
+                input("\n⏸️ Pressione ENTER para continuar para a próxima etapa...")
+                
+        except Exception as e:
+            print(f"\n❌ Erro no prompt {prompt_id}: {e}")
+            choice = input("\n🤔 Continuar mesmo assim? (s/N): ").strip().lower()
+            if choice != 's':
+                print("🛑 Sequência interrompida pelo usuário.")
+                break
+    
+    print(f"\n{'='*60}")
+    print("🎉 ANÁLISE COMPLETA FINALIZADA!")
+    print(f"{'='*60}")
+    print("📊 Resumo: Análise estrutural e de negócio concluída.")
+    print("💡 Para análises de performance, execute os prompts 08-09 individualmente.")
 
 def show_mcp_app():
     """Mostra informações da aplicação"""
@@ -388,13 +616,15 @@ def main_loop():
     print("    \033[93mCOMANDOS PRINCIPAIS:\033[0m")
     print("    \033[36mmcp status\033[0m   - Status do sistema   |  \033[36mmcp actions\033[0m - Menu principal")
     print("    \033[36mmcp list\033[0m     - Listar bancos      |  \033[36mmcp tables\033[0m  - Listar tabelas")
-    print("    \033[36mmcp prompts\033[0m  - Análises prontas   |  \033[36mmcp quit\033[0m    - Sair")
+    print("    \033[36mmcp prompts\033[0m  - Análises organizadas|  \033[36m01-10\033[0m       - Executar prompt")
+    print("    \033[36mall\033[0m          - Sequência completa  |  \033[36mmcp quit\033[0m    - Sair")
     print()
     
     # Se foi auto-iniciado, mostrar dica de acesso rápido
     if is_auto_started():
-        print("    \033[95m💡 DICA: Digite 'mcp actions' para acessar o menu completo\033[0m")
-        print("    \033[95m💡 DICA: Digite 'mcp status' para verificar o sistema\033[0m")
+        print("    \033[95m💡 INÍCIO RÁPIDO: Digite 'mcp prompts' para ver análises organizadas\033[0m")
+        print("    \033[95m💡 SEQUÊNCIA: Digite 'all' para executar análise completa\033[0m")
+        print("    \033[95m💡 DIRETO: Digite '01' a '10' para executar prompt específico\033[0m")
         print()
     
     while True:
@@ -438,9 +668,34 @@ def main_loop():
             elif command in ['mcp app', 'app']:
                 show_mcp_app()
             
+            # Comandos diretos por número (suporta 01-10)
+            elif command.isdigit():
+                num = int(command)
+                if 1 <= num <= 10:
+                    # Normalizar para formato 01, 02, etc.
+                    normalized_id = f"{num:02d}"
+                    execute_prompt(normalized_id)
+                    print()
+                else:
+                    print(f"❌ Número inválido: {command}. Use 01-10 para análises.")
+            
+            # Comandos com formato 01, 02, etc.
+            elif command in ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']:
+                execute_prompt(command)
+                print()
+            
+            # Comandos diretos por nome de banco
+            elif command in ['petclinic', 'postgres']:
+                list_tables(command)
+                print()
+            
             else:
                 print(f"❌ Comando desconhecido: '{command}'")
-                print("💡 Digite 'mcp actions' para ver opções disponíveis\n")
+                print("💡 Comandos disponíveis:")
+                print("   • 'mcp prompts' - Ver análises organizadas")
+                print("   • '01' a '10' - Executar prompt específico")
+                print("   • 'all' - Executar sequência completa")
+                print("   • 'mcp actions' - Menu completo\n")
                 
         except KeyboardInterrupt:
             print("\n\nUse 'quit' para sair\n")
