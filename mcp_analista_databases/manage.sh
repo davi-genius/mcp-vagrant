@@ -25,10 +25,10 @@ function show_usage() {
     echo "Uso: $0 [comando]"
     echo ""
     echo -e "${YELLOW}Comandos disponíveis:${NC}"
-    echo "  up        - Inicia a VM única"
+    echo "  up        - Inicia a VM"
     echo "  down      - Para a VM"
     echo "  status    - Mostra status da VM"
-    echo "  ssh       - SSH direto para a VM"
+    echo "  ssh       - SSH direto para a VM (auto-start prompt MCP)"
     echo "  logs-mcp  - Logs do MCP Analyzer"
     echo "  logs-pg   - Logs do PostgreSQL"
     echo "  logs-app  - Logs do PetClinic"
@@ -36,6 +36,7 @@ function show_usage() {
     echo "  provision - Reprovisiona a VM"
     echo "  reload    - Reinicia a VM"
     echo "  clean     - Limpa e rebuilda o ambiente"
+    echo "  fix-network - Corrige problemas de rede"
     echo ""
     echo -e "${GREEN}Exemplos:${NC}"
     echo "  $0 up                    # Inicia o ambiente completo"
@@ -45,68 +46,68 @@ function show_usage() {
     echo ""
     echo -e "${CYAN}Comandos Vagrant Diretos:${NC}"
     echo "  vagrant up               # Inicia a VM"
-    echo "  vagrant ssh mcp-petclinic-app # SSH para a VM"
+    echo "  vagrant ssh mcp-relational-database-analyzer # SSH para a VM (auto-start prompt)"
     echo "  vagrant halt             # Para a VM"
     echo "  vagrant provision        # Reprovisiona a VM"
     echo "  vagrant reload           # Reinicia a VM"
     echo "  vagrant destroy          # Destrói a VM"
     echo ""
-    echo -e "${YELLOW}Nova Arquitetura (VM Única):${NC}"
-    echo -e "${CYAN}  • mcp-petclinic-app: PostgreSQL + MCP + PetClinic (192.168.56.10)${NC}"
+    echo -e "${YELLOW}Arquitetura (VM Única):${NC}"
+    echo -e "${CYAN}  • mcp-relational-database-analyzer: MCP + PetClinic + PostgreSQL (192.168.56.10)${NC}"
 }
 
 function cmd_up() {
-    echo -e "${GREEN}▶ Iniciando ambiente único MCP + PetClinic...${NC}"
-    vagrant up mcp-petclinic-app
+    echo -e "${GREEN}▶ Iniciando ambiente MCP + PetClinic + PostgreSQL...${NC}"
+    vagrant up mcp-relational-database-analyzer
     echo -e "${GREEN}✅ Ambiente iniciado!${NC}"
     echo -e "${YELLOW}💡 Acesse:${NC}"
     echo "  • MCP Analyzer: http://localhost:8000"
-    echo "  • PetClinic: http://localhost:8080"
+    echo "  • PetClinic: http://localhost:9080"
     echo "  • PostgreSQL: localhost:5432"
     echo ""
-    echo -e "${CYAN}SSH na VM: ${NC}vagrant ssh mcp-petclinic-app"
+    echo -e "${CYAN}SSH na VM: ${NC}vagrant ssh mcp-relational-database-analyzer"
 }
 
 function cmd_down() {
     echo -e "${RED}▶ Parando ambiente...${NC}"
-    vagrant halt mcp-petclinic-app
+    vagrant halt mcp-relational-database-analyzer
     echo -e "${RED}✅ Ambiente parado!${NC}"
 }
 
 function cmd_status() {
-    echo -e "${CYAN}▶ Status do ambiente:${NC}"
-    vagrant status mcp-petclinic-app
+    echo -e "${CYAN}▶ Status da VM:${NC}"
+    vagrant status mcp-relational-database-analyzer
 }
 
 function cmd_ssh() {
     echo -e "${GREEN}▶ Conectando via SSH à VM (auto-start do prompt MCP)...${NC}"
-    vagrant ssh mcp-petclinic-app
+    vagrant ssh mcp-relational-database-analyzer
 }
 
 function cmd_logs_mcp() {
     echo -e "${CYAN}▶ Logs do MCP Analyzer:${NC}"
-    vagrant ssh mcp-petclinic-app -c "sudo journalctl -u mcp-analyzer.service -f"
+    vagrant ssh mcp-relational-database-analyzer -c "sudo journalctl -u mcp-analyzer.service -f"
 }
 
 function cmd_logs_pg() {
     echo -e "${CYAN}▶ Logs do PostgreSQL:${NC}"
-    vagrant ssh mcp-petclinic-app -c "sudo journalctl -u postgresql@14-main -f"
+    vagrant ssh mcp-relational-database-analyzer -c "sudo journalctl -u postgresql -f"
 }
 
 function cmd_logs_app() {
     echo -e "${CYAN}▶ Logs do PetClinic:${NC}"
-    vagrant ssh mcp-petclinic-app -c "sudo journalctl -u petclinic.service -f"
+    vagrant ssh mcp-relational-database-analyzer -c "sudo journalctl -u petclinic.service -f"
 }
 
 function cmd_provision() {
     echo -e "${YELLOW}▶ Reprovisionando VM...${NC}"
-    vagrant provision mcp-petclinic-app
+    vagrant provision mcp-relational-database-analyzer
     echo -e "${GREEN}✅ VM reprovisionada!${NC}"
 }
 
 function cmd_reload() {
     echo -e "${YELLOW}▶ Reiniciando VM...${NC}"
-    vagrant reload mcp-petclinic-app
+    vagrant reload mcp-relational-database-analyzer
     echo -e "${GREEN}✅ VM reiniciada!${NC}"
 }
 
@@ -114,9 +115,9 @@ function cmd_clean() {
     echo -e "${RED}▶ Limpando ambiente...${NC}"
     read -p "Tem certeza? Isso destruirá a VM atual (y/N): " confirm
     if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
-        vagrant destroy -f mcp-petclinic-app
+        vagrant destroy -f mcp-relational-database-analyzer
         echo -e "${GREEN}▶ Reconstruindo ambiente...${NC}"
-        vagrant up mcp-petclinic-app
+        vagrant up mcp-relational-database-analyzer
         echo -e "${GREEN}✅ Ambiente reconstruído!${NC}"
     else
         echo -e "${YELLOW}❌ Cancelado.${NC}"
@@ -147,8 +148,8 @@ function test_connectivity() {
     fi
     
     # Testa PetClinic
-    echo -e "${YELLOW}🔍 PetClinic (localhost:8080)...${NC}"
-    if curl -s --connect-timeout 5 http://localhost:8080 > /dev/null 2>&1; then
+    echo -e "${YELLOW}🔍 PetClinic (localhost:9080)...${NC}"
+    if curl -s --connect-timeout 5 http://localhost:9080 > /dev/null 2>&1; then
         echo -e "${GREEN}✅ PetClinic: OK${NC}"
     else
         echo -e "${RED}❌ PetClinic: Falha${NC}"
@@ -156,7 +157,7 @@ function test_connectivity() {
     
     echo ""
     echo -e "${CYAN}VM Status:${NC}"
-    vagrant status mcp-petclinic-app
+    vagrant status mcp-relational-database-analyzer
     
     echo ""
     echo -e "${YELLOW}Para logs detalhados:${NC}"
@@ -166,7 +167,7 @@ function test_connectivity() {
     
     echo ""
     echo -e "${YELLOW}URLs de acesso:${NC}"
-    echo -e "${CYAN}  • PetClinic: http://localhost:8080${NC}"
+    echo -e "${CYAN}  • PetClinic: http://localhost:9080${NC}"
     echo -e "${CYAN}  • MCP API: http://localhost:8000${NC}"
 }
 
@@ -213,6 +214,10 @@ case "${1:-help}" in
         ;;
     "clean"|"destroy")
         cmd_clean
+        ;;
+    "fix-network")
+        echo -e "${YELLOW}▶ Corrigindo problemas de rede...${NC}"
+        ./fix-network.sh
         ;;
     "help"|*)
         show_usage

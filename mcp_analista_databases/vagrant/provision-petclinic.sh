@@ -4,24 +4,45 @@ set -e
 
 echo "=== Configurando PetClinic Application ==="
 
-# Update system silently
+# Fix DNS and update system
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+
 export DEBIAN_FRONTEND=noninteractive
 echo "Atualizando sistema..."
-apt-get update > /dev/null 2>&1
-apt-get upgrade -y > /dev/null 2>&1
+for i in {1..3}; do
+    apt-get update && break
+    echo "Update retry $i failed, waiting..."
+    sleep 30
+done
+apt-get upgrade -y --fix-missing
 
-# Install Java 17 (OpenJDK)
+# Install Java 17 with retries
 echo "Instalando Java 17..."
-apt-get install -y openjdk-17-jdk curl wget > /dev/null 2>&1
+for i in {1..3}; do
+    apt-get install -y openjdk-17-jdk curl wget netcat-openbsd --fix-missing && break
+    echo "Java install retry $i failed, waiting..."
+    sleep 30
+    apt-get update
+done
 
-# Install Node.js 18 LTS
+# Install Node.js 18 LTS with retries
 echo "Instalando Node.js 18..."
-curl -fsSL https://deb.nodesource.com/setup_18.x 2>/dev/null | bash - > /dev/null 2>&1
-apt-get install -y nodejs > /dev/null 2>&1
+for i in {1..3}; do
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && 
+    apt-get install -y nodejs --fix-missing && break
+    echo "Node.js install retry $i failed, waiting..."
+    sleep 30
+done
 
-# Install Maven
+# Install Maven with retries
 echo "Instalando Maven..."
-apt-get install -y maven > /dev/null 2>&1
+for i in {1..3}; do
+    apt-get install -y maven --fix-missing && break
+    echo "Maven install retry $i failed, waiting..."
+    sleep 30
+    apt-get update
+done
 
 # Verificar versões
 echo "Versões instaladas:"
@@ -95,11 +116,10 @@ Group=vagrant
 WorkingDirectory=/opt/petclinic
 Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 Environment=PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=SPRING_PROFILES_ACTIVE=postgres
-Environment=POSTGRES_URL=jdbc:postgresql://localhost:5432/petclinic
-Environment=POSTGRES_USER=petclinic
-Environment=POSTGRES_PASS=petclinic
-ExecStart=/usr/lib/jvm/java-17-openjdk-amd64/bin/java -Xmx1g -jar target/spring-petclinic-3.2.0-SNAPSHOT.jar --server.port=8080 --server.address=0.0.0.0
+Environment=SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/petclinic
+Environment=SPRING_DATASOURCE_USERNAME=petclinic
+Environment=SPRING_DATASOURCE_PASSWORD=petclinic
+ExecStart=/usr/lib/jvm/java-17-openjdk-amd64/bin/java -Xmx1g -jar target/hilla-petclinic-3.0.0-SNAPSHOT.jar --server.port=8080 --server.address=0.0.0.0
 ExecStop=/bin/kill -15 \$MAINPID
 Restart=always
 RestartSec=15
