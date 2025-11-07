@@ -1,0 +1,118 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Detectar sistema operacional e definir caminhos dinâmicos
+require 'rbconfig'
+
+# Função para detectar o sistema operacional
+def os
+  @os ||= (
+    host_os = RbConfig::CONFIG['host_os']
+    case host_os
+    when /mswin|msys|mingw|cygwin|bccwin|wince|emc/
+      :windows
+    when /darwin|mac os/
+      :macosx
+    when /linux/
+      :linux
+    when /solaris|bsd/
+      :unix
+    else
+      raise Error::WebDriverError, "unknown os: #{host_os.inspect}"
+    end
+  )
+end
+
+# Definir caminhos dinâmicos baseados no diretório atual
+project_root = File.dirname(__FILE__)
+mcp_source = File.join(project_root, "apps", "mcp")
+petclinic_source = File.join(project_root, "apps", "pet-clinic-hilla")
+
+Vagrant.configure("2") do |config|
+  # Base box - Ubuntu 22.04 LTS (Jammy Jellyfish)
+  config.vm.box = "ubuntu/jammy64"
+  
+  # Configurações globais
+  config.vm.box_check_update = false
+  config.ssh.insert_key = false
+  config.ssh.forward_agent = true
+
+  # VM Única - MCP + PetClinic + PostgreSQL
+  config.vm.define "mcp-relational-database-analyzer", primary: true do |app|
+    app.vm.hostname = "mcp-relational-database-analyzer"
+    app.vm.network "private_network", ip: "192.168.56.10"
+    app.vm.network "forwarded_port", guest: 8000, host: 8000, auto_correct: true  # MCP API
+    app.vm.network "forwarded_port", guest: 8080, host: 9080, auto_correct: true  # PetClinic
+    app.vm.network "forwarded_port", guest: 8081, host: 9081, auto_correct: true  # PetClinic Alt
+    app.vm.network "forwarded_port", guest: 3000, host: 3000, auto_correct: true  # Frontend Dev
+    app.vm.network "forwarded_port", guest: 5432, host: 5432, auto_correct: true  # PostgreSQL
+    
+    app.vm.provider "virtualbox" do |vb|
+      vb.memory = "4096"  # 4GB para rodar MCP + PetClinic + PostgreSQL
+      vb.cpus = 2
+      vb.name = "mcp-relational-database-analyzer"
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+      vb.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+      vb.customize ["modifyvm", :id, "--natnet1", "10.0.2.0/24"]
+      vb.customize ["modifyvm", :id, "--cableconnected1", "on"]
+    end
+    
+    # Sync do código MCP (caminho dinâmico)
+    app.vm.synced_folder mcp_source, "/opt/mcp",
+      type: "rsync",
+      rsync__exclude: [".git/", "__pycache__/", "*.pyc", ".env"]
+    
+    # Sync do código PetClinic (caminho dinâmico)
+    app.vm.synced_folder petclinic_source, "/opt/petclinic", 
+      type: "rsync",
+      rsync__exclude: [".git/", "node_modules/", "target/", ".mvn/"]
+    
+    # Provisionar ambiente completo (MCP + PetClinic + PostgreSQL)
+    app.vm.provision "shell", path: File.join(project_root, "provisioner.sh")
+    
+    app.vm.provision "shell", inline: <<-SHELL
+      # Configurar aliases úteis
+      echo "alias mcp-prompt='cd /home/vagrant && python3 mcp-prompt.py'" >> /home/vagrant/.bashrc
+      echo "alias mcp-start='cd /home/vagrant && python3 mcp-prompt.py'" >> /home/vagrant/.bashrc
+      echo "alias mcp-status='systemctl status mcp-analyzer --no-pager'" >> /home/vagrant/.bashrc
+      echo "alias mcp-logs='journalctl -u mcp-analyzer -f'" >> /home/vagrant/.bashrc
+      echo "alias petclinic-status='systemctl status petclinic --no-pager'" >> /home/vagrant/.bashrc
+      echo "alias petclinic-logs='journalctl -u petclinic -f'" >> /home/vagrant/.bashrc
+      echo "alias pg-status='systemctl status postgresql --no-pager'" >> /home/vagrant/.bashrc
+      echo "alias pg-logs='journalctl -u postgresql -f'" >> /home/vagrant/.bashrc
+      
+      # Configurar permissões
+      chown vagrant:vagrant /home/vagrant/mcp-prompt.py
+      chmod +x /home/vagrant/mcp-prompt.py
+      
+      # Configurar auto-start do MCP prompt no SSH
+      cat >> /home/vagrant/.bashrc << 'EOFBASH'
+
+# Auto-start MCP prompt on interactive SSH login
+if [[ \$- == *i* ]] && [[ -n "\$SSH_CONNECTION" ]] && [[ -z "\$MCP_PROMPT_STARTED" ]]; then
+    export MCP_PROMPT_STARTED=1
+    echo ""
+    echo "� Iniciando MCP Database Analyzer automaticamente..."
+    echo "   >> Pressione Ctrl+C para cancelar ou aguarde 2 segundos"
+    echo ""
+    
+    # Simple sleep with ability to interrupt
+    sleep 2 2>/dev/null || {
+        echo "Inicialização cancelada pelo usuário."
+        echo ">> Use 'mcp-start' para iniciar o prompt quando quiser!"
+        return
+    }
+    
+    # Start MCP prompt
+    cd /home/vagrant
+    if [ -f mcp-prompt.py ]; then
+        python3 mcp-prompt.py
+    else
+        echo "[!] Script mcp-prompt.py não encontrado em /home/vagrant/"
+        echo ">> Use 'mcp-start' ou navegue para o diretório correto"
+    fi
+fi
+EOFBASH
+    SHELL
+  end
+end
